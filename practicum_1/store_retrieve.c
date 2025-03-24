@@ -18,9 +18,12 @@ typedef struct {
     int valid;
     int id;
     Message msg;
+    time_t last_access;
 } CacheSlot;
 
 CacheSlot cache[CACHE_SIZE];
+int fifo_index = 0; // Tracks the oldest message
+
 
 Message* create_msg(int id, const char* sender, const char* receiver, const char* content) {
 
@@ -110,7 +113,29 @@ Message* check_cache(int id) {
     return NULL;
 }
 
+
 void add_to_cache(Message* msg) {
+    // Check for an empty slot first
+    for (int i = 0; i < CACHE_SIZE; i++) {
+        if (!cache[i].valid) {
+            cache[i].valid = 1;
+            cache[i].id = msg->id;
+            cache[i].msg = *msg;
+            return;
+        }
+    }
+
+    // Perform FIFO replacement if cache is full
+    cache[fifo_index].id = msg->id;
+    cache[fifo_index].msg = *msg;
+    cache[fifo_index].valid = 1;
+
+    // Update the FIFO index to the next slot in a circular manner
+    fifo_index = (fifo_index + 1) % CACHE_SIZE;
+}
+
+
+void add_to_cache_random(Message* msg) {
     for (int i = 0; i < CACHE_SIZE; i++) {
         if (!cache[i].valid) {
             cache[i].valid = 1;
@@ -124,7 +149,36 @@ void add_to_cache(Message* msg) {
     cache[victim].id = msg->id;
     cache[victim].msg = *msg;
     cache[victim].valid = 1;
+    cache[victim].last_access = time(NULL); // Track the time
+    printf("Message %d added to cache using Random Replacement at index %d.\n", msg->id, victim);
+
+
 }
+
+void add_to_cache_lru(Message* msg) {
+    int index = -1;
+    time_t oldest_time = time(NULL);
+
+    // Find an empty slot or the least recently used one
+    for (int i = 0; i < CACHE_SIZE; i++) {
+        if (!cache[i].valid) {
+            index = i;
+            break;
+        }
+        if (cache[i].last_access < oldest_time) {
+            oldest_time = cache[i].last_access;
+            index = i;
+        }
+    }
+
+    // Replace and update the cache
+    cache[index].valid = 1;
+    cache[index].id = msg->id;
+    cache[index].msg = *msg;
+    cache[index].last_access = time(NULL);
+    printf("Message %d added to cache using LRU Replacement at index %d.\n", msg->id, index);
+}
+
 
 int store_msg(Message* msg) {
     int result = store_msg_to_disk(msg);
@@ -153,6 +207,7 @@ Message* retrieve_msg(int id) {
 
 
 int main() {
+    
     Message* msg = create_msg(1, "Prabesh", "Vanessa", "This is a test message.");
     store_msg(msg);
 
@@ -168,6 +223,7 @@ int main() {
     } else {
         printf("Failed to retrieve message.\n");
     }
+
 
     return 0;
 }
