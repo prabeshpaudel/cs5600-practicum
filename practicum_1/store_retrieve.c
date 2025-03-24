@@ -3,6 +3,8 @@
 #include <string.h>
 #include <time.h>
 
+#define CACHE_SIZE 16
+
 typedef struct {
     int id;
     time_t timestamp;
@@ -11,6 +13,14 @@ typedef struct {
     char content[256];
     int delivered;
 } Message;
+
+typedef struct {
+    int valid;
+    int id;
+    Message msg;
+} CacheSlot;
+
+CacheSlot cache[CACHE_SIZE];
 
 Message* create_msg(int id, const char* sender, const char* receiver, const char* content) {
 
@@ -31,7 +41,7 @@ Message* create_msg(int id, const char* sender, const char* receiver, const char
     return msg;
 }
 
-int store_msg(Message* msg) {
+int store_msg_to_disk(Message* msg) {
 
     if (msg == NULL) {
         printf("Error: Message is NULL\n");
@@ -60,7 +70,9 @@ int store_msg(Message* msg) {
     return 0;
 }
 
-Message* retrieve_msg(int id) {
+
+
+Message* retrieve_msg_from_disk(int id) {
     char filename[50];
     snprintf(filename, sizeof(filename), "messages/message_%d.txt", id);
 
@@ -89,11 +101,60 @@ Message* retrieve_msg(int id) {
     return msg;
 }
 
+Message* check_cache(int id) {
+    for (int i = 0; i < CACHE_SIZE; i++) {
+        if (cache[i].valid && cache[i].id == id) {
+            return &cache[i].msg;
+        }
+    }
+    return NULL;
+}
+
+void add_to_cache(Message* msg) {
+    for (int i = 0; i < CACHE_SIZE; i++) {
+        if (!cache[i].valid) {
+            cache[i].valid = 1;
+            cache[i].id = msg->id;
+            cache[i].msg = *msg;
+            return;
+        }
+    }
+
+    int victim = rand() % CACHE_SIZE;
+    cache[victim].id = msg->id;
+    cache[victim].msg = *msg;
+    cache[victim].valid = 1;
+}
+
+int store_msg(Message* msg) {
+    int result = store_msg_to_disk(msg);
+    if (result == 0) {
+        add_to_cache(msg);
+    }
+    return result;
+}
+
+Message* retrieve_msg(int id) {
+    Message* cached = check_cache(id);
+    if (cached != NULL) {
+        printf("[Cache HIT]\n");
+        return cached;
+    }
+
+    printf("[Cache MISS]\n");
+    Message* loaded = retrieve_msg_from_disk(id);
+    if (loaded != NULL) {
+        add_to_cache(loaded);
+    }
+
+    return loaded;
+}
+
+
+
 int main() {
     Message* msg = create_msg(1, "Prabesh", "Vanessa", "This is a test message.");
     store_msg(msg);
-
-    free(msg);
 
     Message* retrieved_msg = retrieve_msg(1);
 
@@ -104,7 +165,6 @@ int main() {
         printf("Receiver: %s\n", retrieved_msg->receiver);
         printf("Content: %s\n", retrieved_msg->content);
         printf("Delivered: %d\n", retrieved_msg->delivered);
-        free(retrieved_msg);
     } else {
         printf("Failed to retrieve message.\n");
     }
