@@ -108,6 +108,8 @@ Message* check_cache(int id) {
     for (int i = 0; i < CACHE_SIZE; i++) {
         if (cache[i].valid && cache[i].id == id) {
             return &cache[i].msg;
+            printf("%s", &cache[i].msg);
+
         }
     }
     return NULL;
@@ -194,7 +196,7 @@ Message* retrieve_msg(int id) {
         printf("[Cache HIT]\n");
         return cached;
     }
-
+    
     printf("[Cache MISS]\n");
     Message* loaded = retrieve_msg_from_disk(id);
     if (loaded != NULL) {
