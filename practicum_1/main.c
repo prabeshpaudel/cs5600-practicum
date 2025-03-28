@@ -7,8 +7,7 @@
 #define NUM_MESSAGES 1000
 #define NUM_ACCESSES 1000
 
-
-
+// Generates messages with unique IDs and stores them using specified method
 void generate_messages(const char* method) {
     reset_cache();
     for (int i = 0; i < NUM_MESSAGES; i++) {
@@ -22,17 +21,12 @@ void generate_messages(const char* method) {
         free(msg);
     }
     printf("Generated %d messages.\n", NUM_MESSAGES);
-
-
-   
-    //reset_hm();
-
 }
 
+// Evaluates cache performance by randomly accessing stored messages
 void evaluate_cache(const char* method) {
-
     for (int i = 0; i < NUM_ACCESSES; i++) {
-        int msg_id = rand() % NUM_MESSAGES;
+        int msg_id = rand() % NUM_MESSAGES;  // random message ID
         retrieve_msg(msg_id, method);
     }
 
@@ -42,14 +36,11 @@ void evaluate_cache(const char* method) {
     reset_hm();
 }
 
-
 int main(int argc, char* argv[]) {
-    srand(time(NULL));
+    srand(time(NULL));  // seed RNG
 
-    generate_messages(argv[1]);
-    evaluate_cache(argv[1]);
+    generate_messages(argv[1]);  // generate and store messages
+    evaluate_cache(argv[1]);     // evaluate cache performance
+
     return 0;
-
 }
-
-
