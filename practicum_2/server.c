@@ -9,11 +9,63 @@
 
 #define BUFFER_SIZE 8196
 
+void handle_writes(const char* remote_path, const char* file_data) {
+    char full_path[1024];
+    snprintf(full_path, sizeof(full_path), "%s", remote_path);
+
+    
+    char folder[1024];
+    strncpy(folder, full_path, sizeof(folder));
+    char *last_slash = strrchr(folder, '/');
+    if (last_slash) {
+        *last_slash = '\0';
+        char mkdir_cmd[1024];
+        snprintf(mkdir_cmd, sizeof(mkdir_cmd), "mkdir -p \"%s\"", folder);
+        system(mkdir_cmd);
+    }
+
+    FILE *f = fopen(full_path, "w");
+    if (f) {
+        fwrite(file_data, 1, strlen(file_data), f);
+        fclose(f);
+        printf("File written to %s\n", full_path);
+    } else {
+        printf("Failed to write to %s\n", full_path);
+    }
+
+}
+
+void handle_gets(char *remote_path, int client_socket) {
+    if (!remote_path) {
+        send(client_socket, "ERROR: Missing remote path", 26, 0);
+        return;
+    }
+    
+    char full_path[BUFFER_SIZE];
+    snprintf(full_path, BUFFER_SIZE, "%s", remote_path);
+    
+    FILE *file = fopen(full_path, "rb");
+    if (!file) {
+        send(client_socket, "ERROR: File not found", 21, 0);
+        return;
+    }
+    
+    // Send file content
+    char buffer[BUFFER_SIZE];
+    size_t bytes_read;
+    while ((bytes_read = fread(buffer, 1, BUFFER_SIZE, file)) > 0) {
+        send(client_socket, buffer, bytes_read, 0);
+    }
+    
+    fclose(file);
+}
 void handle_client(int client_sock) {
     char buffer[BUFFER_SIZE];
     memset(buffer, 0, sizeof(buffer));
 
+
     int bytes_received = recv(client_sock, buffer, sizeof(buffer), 0);
+
     if (bytes_received <= 0) {
         perror("Receive failed");
         close(client_sock);
@@ -39,34 +91,17 @@ void handle_client(int client_sock) {
         return;
     }
 
-    if (strcmp(command, "WRITE") != 0) {
+    if (strcmp(command, "WRITE") != 0 && strcmp(command, "GET") != 0) {
         printf("Unsupported command\n");
         close(client_sock);
         return;
     }
-
-    char full_path[1024];
-    snprintf(full_path, sizeof(full_path), "%s", remote_path);
-
-
-    char folder[1024];
-    strncpy(folder, full_path, sizeof(folder));
-    char *last_slash = strrchr(folder, '/');
-    if (last_slash) {
-        *last_slash = '\0';
-        char mkdir_cmd[1024];
-        snprintf(mkdir_cmd, sizeof(mkdir_cmd), "mkdir -p \"%s\"", folder);
-        system(mkdir_cmd);
+    if (strcmp(command, "WRITE") == 0) {
+        handle_writes(remote_path, file_data);
+    } else if (strcmp(command, "GET") == 0) {
+        handle_gets(remote_path, client_sock);
     }
 
-    FILE *f = fopen(full_path, "w");
-    if (f) {
-        fwrite(file_data, 1, strlen(file_data), f);
-        fclose(f);
-        printf("File written to %s\n", full_path);
-    } else {
-        printf("Failed to write to %s\n", full_path);
-    }
 
     close(client_sock);
 }
