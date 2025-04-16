@@ -43,14 +43,13 @@ void handle_gets(char *remote_path, int client_socket) {
     
     char full_path[BUFFER_SIZE];
     snprintf(full_path, BUFFER_SIZE, "%s", remote_path);
-    
+    printf("Full path: %s\n", full_path);
     FILE *file = fopen(full_path, "rb");
     if (!file) {
         send(client_socket, "ERROR: File not found", 21, 0);
         return;
     }
     
-    // Send file content
     char buffer[BUFFER_SIZE];
     size_t bytes_read;
     while ((bytes_read = fread(buffer, 1, BUFFER_SIZE, file)) > 0) {
@@ -83,25 +82,26 @@ void handle_client(int client_sock) {
     char *file_data = newline_pos + 1;
 
     char *command = strtok(buffer, " ");
-    char *remote_path = strtok(NULL, "");
+    char *remote_path = strtok(NULL, "\n");
 
-    if (!command || !remote_path || strlen(file_data) == 0) {
+    if (!command || !remote_path) {
         printf("Invalid command or format\n");
         close(client_sock);
         return;
-    }
+    }    
 
-    if (strcmp(command, "WRITE") != 0 && strcmp(command, "GET") != 0) {
-        printf("Unsupported command\n");
-        close(client_sock);
-        return;
-    }
-    if (strcmp(command, "WRITE") == 0) {
-        handle_writes(remote_path, file_data);
-    } else if (strcmp(command, "GET") == 0) {
+    if (strcmp(command, "GET") == 0) {
         handle_gets(remote_path, client_sock);
-    }
-
+    } else if (strcmp(command, "WRITE") == 0) {
+        if (strlen(file_data) == 0) {
+            printf("Invalid WRITE format: missing file data\n");
+            close(client_sock);
+            return;
+        }
+        handle_writes(remote_path, file_data);
+    } else {
+        printf("Unsupported command\n");
+    }    
 
     close(client_sock);
 }

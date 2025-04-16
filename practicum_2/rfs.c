@@ -33,7 +33,17 @@ int handle_write(const char* local_path, const char* remote_path, int sock) {
      return 0;
 }
 
-int handle_get(const char *local_path, int sock) {
+int handle_get(const char *local_path, const char *remote_path, int sock) {
+    
+    char message[BUFFER_SIZE];
+    snprintf(message, sizeof(message), "GET %s\n", remote_path);
+    
+    if (send(sock, message, strlen(message), 0) < 0) {
+        perror("Send failed");
+        close(sock);
+        return 1;
+    }
+
     FILE *file = fopen(local_path, "wb");
     if (!file) {
         printf("Error: Could not create local file\n");
@@ -67,8 +77,8 @@ int main(int argc, char *argv[]) {
 
 
     char *command = argv[1];
-    char *local_path = argv[2];
-    char *remote_path = argv[3];
+    char *remote_path = argv[2];
+    char *local_path = argv[3];
 
     struct sockaddr_in server;
     server.sin_family = AF_INET;
@@ -90,8 +100,6 @@ int main(int argc, char *argv[]) {
     if (strcmp(command, "WRITE") == 0) {
         return handle_write(local_path, remote_path, sock);
     } else if(strcmp(command, "GET") == 0) {
-        return handle_get(local_path, sock);
-    }
-
-    
+        return handle_get(local_path, remote_path, sock);
+    }   
 }
