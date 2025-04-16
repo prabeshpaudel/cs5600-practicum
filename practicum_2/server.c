@@ -58,6 +58,27 @@ void handle_gets(char *remote_path, int client_socket) {
     
     fclose(file);
 }
+
+void handle_rm(const char *path, int client_sock) {
+    if (!path) {
+        send(client_sock, "ERROR: No path specified", 24, 0);
+        return;
+    }
+
+    if (remove(path) == 0) {
+        send(client_sock, "SUCCESS: File removed", 22, 0);
+        return;
+    }
+
+    if (rmdir(path) == 0) {
+        send(client_sock, "SUCCESS: Folder removed", 24, 0);
+        return;
+    }
+
+    perror("rm error");
+    send(client_sock, "ERROR: Could not remove path", 28, 0);
+}
+
 void handle_client(int client_sock) {
     char buffer[BUFFER_SIZE];
     memset(buffer, 0, sizeof(buffer));
@@ -99,8 +120,11 @@ void handle_client(int client_sock) {
             return;
         }
         handle_writes(remote_path, file_data);
+    } else if (strcmp(command, "RM") == 0) {
+        handle_rm(remote_path, client_sock);
     } else {
         printf("Unsupported command\n");
+        send(client_sock, "ERROR: Unsupported command", 26, 0);
     }    
 
     close(client_sock);

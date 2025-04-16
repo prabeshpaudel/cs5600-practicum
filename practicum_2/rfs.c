@@ -67,13 +67,42 @@ int handle_get(const char *local_path, const char *remote_path, int sock) {
     return 0;
 }
 
-int main(int argc, char *argv[]) {
-    if (argc != 4 || (strcmp(argv[1], "WRITE") != 0 && strcmp(argv[1], "GET") != 0)) {
-    printf("Usage:\n");
-    printf("  %s WRITE <local_file> <remote_path>\n", argv[0]);
-    printf("  %s GET <remote_path> <local_file>\n", argv[0]);
-    return 1;
+int handle_rm(const char *remote_path, int sock) {
+    char message[BUFFER_SIZE];
+    snprintf(message, sizeof(message), "RM %s\n", remote_path);
+
+    if (send(sock, message, strlen(message), 0) < 0) {
+        perror("Send failed");
+        return 1;
+    }
+
+    char response[BUFFER_SIZE];
+    int bytes_received = recv(sock, response, sizeof(response) - 1, 0);
+    if (bytes_received <= 0) {
+        printf("Error receiving server response\n");
+        return 1;
+    }
+
+    response[bytes_received] = '\0';
+    printf("Server: %s\n", response);
+
+    return (strncmp(response, "SUCCESS", 7) == 0) ? 0 : 1;
 }
+
+int main(int argc, char *argv[]) {
+    if ((strcmp(argv[1], "WRITE") == 0 || strcmp(argv[1], "GET") == 0) && argc != 4) {
+        printf("Usage:\n");
+        printf("  %s WRITE <local_file> <remote_path>\n", argv[0]);
+        printf("  %s GET <remote_path> <local_file>\n", argv[0]);
+        return 1;
+    } else if (strcmp(argv[1], "RM") == 0 && argc != 3) {
+        printf("Usage:\n");
+        printf("  %s RM <remote_path>\n", argv[0]);
+        return 1;
+    } else if (strcmp(argv[1], "WRITE") != 0 && strcmp(argv[1], "GET") != 0 && strcmp(argv[1], "RM") != 0) {
+        printf("Unsupported command: %s\n", argv[1]);
+        return 1;
+    }    
 
 
     char *command = argv[1];
@@ -101,5 +130,7 @@ int main(int argc, char *argv[]) {
         return handle_write(local_path, remote_path, sock);
     } else if(strcmp(command, "GET") == 0) {
         return handle_get(local_path, remote_path, sock);
-    }   
+    } else if (strcmp(command, "RM") == 0) {
+        return handle_rm(remote_path, sock);
+    }
 }
