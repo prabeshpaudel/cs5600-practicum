@@ -7,7 +7,7 @@
 
 #define BUFFER_SIZE 8196
 
-int handle_write(const char* local_path, const char* remote_path, int sock) {
+int handle_write(const char* local_path, const char* remote_path, const char* access, int sock) {
      FILE *f = fopen(local_path, "r");
     if (!f) {
         perror("Failed to open local file");
@@ -20,7 +20,7 @@ int handle_write(const char* local_path, const char* remote_path, int sock) {
     fclose(f);
 
     char message[BUFFER_SIZE];
-    snprintf(message, sizeof(message), "WRITE %s\n%s", remote_path, file_data);
+    snprintf(message, sizeof(message), "WRITE %s %s\n%s", remote_path, access, file_data);
 
     if (send(sock, message, strlen(message), 0) < 0) {
         perror("Send failed");
@@ -90,12 +90,17 @@ int handle_rm(const char *remote_path, int sock) {
 }
 
 int main(int argc, char *argv[]) {
-    if ((strcmp(argv[1], "WRITE") == 0 || strcmp(argv[1], "GET") == 0) && argc != 4) {
-        printf("Usage:\n");
-        printf("  %s WRITE <local_file> <remote_path>\n", argv[0]);
-        printf("  %s GET <remote_path> <local_file>\n", argv[0]);
+    if ((strcmp(argv[1], "WRITE")) == 0 && (!(argc ==4||argc ==5)) ) {
+        printf("  %s WRITE <local_file> <remote_path> <access>\n", argv[0]);
         return 1;
-    } else if (strcmp(argv[1], "RM") == 0 && argc != 3) {
+        
+    } else if (strcmp(argv[1], "GET") == 0 && argc != 4) {
+        printf("Usage:\n");
+        printf("  %s GET <remote_path> <local_file>\n", argv[0]);
+
+
+    }
+    else if (strcmp(argv[1], "RM") == 0 && argc != 3) {
         printf("Usage:\n");
         printf("  %s RM <remote_path>\n", argv[0]);
         return 1;
@@ -106,8 +111,9 @@ int main(int argc, char *argv[]) {
 
 
     char *command = argv[1];
-    char *remote_path = argv[2];
-    char *local_path = argv[3];
+    char *arg1 = argv[2];
+    char *arg2 = argv[3];
+    char *access = argv[4];
 
     struct sockaddr_in server;
     server.sin_family = AF_INET;
@@ -127,10 +133,10 @@ int main(int argc, char *argv[]) {
     }
 
     if (strcmp(command, "WRITE") == 0) {
-        return handle_write(local_path, remote_path, sock);
+        return handle_write(arg1, arg2, access, sock);
     } else if(strcmp(command, "GET") == 0) {
-        return handle_get(local_path, remote_path, sock);
+        return handle_get(arg2, arg1, sock);
     } else if (strcmp(command, "RM") == 0) {
-        return handle_rm(remote_path, sock);
+        return handle_rm(arg1, sock);
     }
 }

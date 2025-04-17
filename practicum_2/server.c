@@ -8,8 +8,29 @@
 #include <fcntl.h>
 
 #define BUFFER_SIZE 8196
+#define MAX_FILES 100
 
-void handle_writes(const char* remote_path, const char* file_data) {
+
+typedef struct {
+    char path[1024];
+    int is_readonly;  // 1 for read-only, 0 for read-write
+} FilePermission;
+
+FilePermission permissions[MAX_FILES];
+int permission_count = 0;
+
+// Check if a file is read-only
+int is_file_readonly(const char *path) {
+    for (int i = 0; i < permission_count; i++) {
+        if (strcmp(permissions[i].path, path) == 0) {
+            return permissions[i].is_readonly;
+        }
+    }
+    return 0;  // Default to read-write if not found
+}
+
+
+void handle_writes(const char* remote_path, const char* file_data, const char* access) {
     char full_path[1024];
     snprintf(full_path, sizeof(full_path), "%s", remote_path);
 
@@ -23,15 +44,41 @@ void handle_writes(const char* remote_path, const char* file_data) {
         snprintf(mkdir_cmd, sizeof(mkdir_cmd), "mkdir -p \"%s\"", folder);
         system(mkdir_cmd);
     }
+    // Check if file exists and is read-only
+    if (is_file_readonly(full_path)) {
+        perror("Cannot write to read-only file\n");
+        return;
+    }
 
-    FILE *f = fopen(full_path, "w");
+    int found = 0;
+    for (int i = 0; i < permission_count; i++) {
+        if (strcmp(permissions[i].path, full_path) == 0) {
+            found = 1;
+            break;
+        }
+    }
+
+
+        FILE *f = fopen(full_path, "w");
     if (f) {
         fwrite(file_data, 1, strlen(file_data), f);
         fclose(f);
-        printf("File written to %s\n", full_path);
+
+        // Use default if access is NULL or empty
+        const char *effective_access = (access && strlen(access) > 0) ? access : "RW";
+
+        if (!found && permission_count < MAX_FILES) {
+            strncpy(permissions[permission_count].path, full_path, sizeof(permissions[0].path));
+            permissions[permission_count].is_readonly = (strcmp(effective_access, "RO") == 0);
+            permission_count++;
+        }
+
+        printf("File written to %s as %s\n", full_path, 
+               (strcmp(effective_access, "RO") == 0) ? "read-only" : "read-write");
     } else {
         printf("Failed to write to %s\n", full_path);
     }
+
 
 }
 
@@ -60,6 +107,11 @@ void handle_gets(char *remote_path, int client_socket) {
 }
 
 void handle_rm(const char *path, int client_sock) {
+    if (is_file_readonly(path)) {
+            send(client_sock, "ERROR: File is read-only", 24, 0);
+            return;
+        }
+
     if (!path) {
         send(client_sock, "ERROR: No path specified", 24, 0);
         return;
@@ -103,15 +155,12 @@ void handle_client(int client_sock) {
     char *file_data = newline_pos + 1;
 
     char *command = strtok(buffer, " ");
-    char *remote_path = strtok(NULL, "\n");
+    printf("command: %s\n", command);
 
-    if (!command || !remote_path) {
-        printf("Invalid command or format\n");
-        close(client_sock);
-        return;
-    }    
-
+ 
     if (strcmp(command, "GET") == 0) {
+        char *remote_path = strtok(NULL, "\n");
+        printf("remote_path: %s\n", remote_path);
         handle_gets(remote_path, client_sock);
     } else if (strcmp(command, "WRITE") == 0) {
         if (strlen(file_data) == 0) {
@@ -119,8 +168,16 @@ void handle_client(int client_sock) {
             close(client_sock);
             return;
         }
-        handle_writes(remote_path, file_data);
+        char *remote_path = strtok(NULL, " ");
+        char *access = strtok(NULL, "\n"); // This gets the rest of the line before \n
+
+        printf("remote_path: %s\n", remote_path);
+        printf("access: %s\n", access);
+
+        handle_writes(remote_path, file_data, access);
     } else if (strcmp(command, "RM") == 0) {
+        char *remote_path = strtok(NULL, "\n");
+        printf("remote_path: %s\n", remote_path);
         handle_rm(remote_path, client_sock);
     } else {
         printf("Unsupported command\n");
