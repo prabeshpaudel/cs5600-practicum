@@ -13,7 +13,7 @@
 
 typedef struct {
     char path[1024];
-    int is_readonly;  // 1 for read-only, 0 for read-write
+    char is_readonly[3];  
 } FilePermission;
 
 FilePermission permissions[MAX_FILES];
@@ -21,9 +21,11 @@ int permission_count = 0;
 
 // Check if a file is read-only
 int is_file_readonly(const char *path) {
-    for (int i = 0; i < permission_count; i++) {
+    printf("path : %s\n", path);
+    for (int i = 0; i < MAX_FILES; i++) {
         if (strcmp(permissions[i].path, path) == 0) {
-            return permissions[i].is_readonly;
+            printf("IS READ ONLLY? %s\n" ,permissions[i].is_readonly);
+            return (strcmp(permissions[i].is_readonly, "RO") == 0);
         }
     }
     return 0;  // Default to read-write if not found
@@ -51,15 +53,25 @@ void handle_writes(const char* remote_path, const char* file_data, const char* a
     }
 
     int found = 0;
+    const char *found_access;
     for (int i = 0; i < permission_count; i++) {
         if (strcmp(permissions[i].path, full_path) == 0) {
             found = 1;
+            found_access = permissions[i].is_readonly;
             break;
         }
     }
 
+    printf("found_access: %s\n", found_access);
 
-        FILE *f = fopen(full_path, "w");
+    if ((strcmp(found_access, "RW") == 0 || strcmp(found_access, "RO") == 0)  && strcmp(found_access, access) !=0) {
+        perror("Cannot change the permissions of the file \n");
+        return;
+    }
+
+
+
+    FILE *f = fopen(full_path, "w");
     if (f) {
         fwrite(file_data, 1, strlen(file_data), f);
         fclose(f);
@@ -69,9 +81,14 @@ void handle_writes(const char* remote_path, const char* file_data, const char* a
 
         if (!found && permission_count < MAX_FILES) {
             strncpy(permissions[permission_count].path, full_path, sizeof(permissions[0].path));
-            permissions[permission_count].is_readonly = (strcmp(effective_access, "RO") == 0);
+            printf("path added to file system as %s\n", permissions[permission_count].path);
+            strncpy(permissions[permission_count].is_readonly, effective_access, 2);
+            permissions[permission_count].is_readonly[2] = '\0';  // Ensure null termination
+            printf("added to file system as %s\n", permissions[permission_count].is_readonly);
             permission_count++;
         }
+
+
 
         printf("File written to %s as %s\n", full_path, 
                (strcmp(effective_access, "RO") == 0) ? "read-only" : "read-write");
